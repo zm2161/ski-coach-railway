@@ -57,12 +57,19 @@ function handleTimeUpdate() {
 function showCoachingWindow(segmentId) {
     const window = document.getElementById(`coaching-window-${segmentId}`);
     if (window) {
+        // 显示窗口
+        window.style.display = 'block';
         window.classList.add('active');
-        window.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // 滚动到顶部（因为最新的在顶部）
+        coachingWindows.scrollTop = 0;
+        // 平滑滚动到该窗口
+        setTimeout(() => {
+            window.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
     }
 }
 
-// 渲染所有教练反馈窗口
+// 渲染所有教练反馈窗口（初始隐藏，播放时才显示）
 function renderCoachingWindows() {
     coachingWindows.innerHTML = '';
     
@@ -71,6 +78,8 @@ function renderCoachingWindows() {
     
     sortedSegments.forEach(segment => {
         const window = createCoachingWindow(segment);
+        // 初始隐藏，等待视频播放到对应时间点才显示
+        window.style.display = 'none';
         coachingWindows.appendChild(window);
     });
 }
@@ -134,7 +143,9 @@ async function loadRecommendations() {
     try {
         recommendationsList.innerHTML = '<p class="loading">正在生成推荐练习...</p>';
         
-        const response = await fetch(`/api/video/${videoId}/recommendations?sport=${sport}&terrain=${terrain}`);
+        // 传递所有片段数据给后端
+        const segmentsParam = encodeURIComponent(JSON.stringify(segmentsData));
+        const response = await fetch(`/api/video/${videoId}/recommendations?sport=${sport}&terrain=${terrain}&segments=${segmentsParam}`);
         const data = await response.json();
         
         if (data.recommendations && data.recommendations.length > 0) {

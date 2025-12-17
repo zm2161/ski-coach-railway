@@ -1,0 +1,22 @@
+# 环境变量
+.env
+.env.local
+
+# 依赖
+node_modules/
+
+# 上传文件（临时）
+uploads/
+*.mp4
+*.mov
+*.avi
+*.webm
+
+# 日志
+*.log
+npm-debug.log*
+
+# 系统文件
+.DS_Store
+Thumbs.db
+

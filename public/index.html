@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flo AI 滑雪教练 - 上传视频</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⛷️🏂 Flo AI 滑雪教练</h1>
+            <p class="subtitle">上传您的滑雪视频，获得专业AI教练分析</p>
+        </header>
+
+        <!-- 运动选择 -->
+        <section id="sport-selection" class="section">
+            <h2>选择运动项目</h2>
+            <div class="sport-buttons">
+                <button class="sport-btn" data-sport="skiing">
+                    <span class="emoji">⛷️</span>
+                    <span>双板滑雪</span>
+                </button>
+                <button class="sport-btn" data-sport="snowboarding">
+                    <span class="emoji">🏂</span>
+                    <span>单板滑雪</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- 地形选择 -->
+        <section id="terrain-selection" class="section hidden">
+            <h2>选择地形</h2>
+            <div class="terrain-options">
+                <label class="terrain-option">
+                    <input type="radio" name="terrain" value="beginner">
+                    <span class="terrain-label">平地 / 绿道（初级）</span>
+                </label>
+                <label class="terrain-option">
+                    <input type="radio" name="terrain" value="intermediate">
+                    <span class="terrain-label">蓝道（中级）</span>
+                </label>
+                <label class="terrain-option">
+                    <input type="radio" name="terrain" value="advanced">
+                    <span class="terrain-label">黑道（高级陡坡）</span>
+                </label>
+                <label class="terrain-option">
+                    <input type="radio" name="terrain" value="moguls">
+                    <span class="terrain-label">蘑菇道（雪包）</span>
+                </label>
+                <label class="terrain-option">
+                    <input type="radio" name="terrain" value="freestyle">
+                    <span class="terrain-label">自由式（公园、跳台）</span>
+                </label>
+            </div>
+        </section>
+
+        <!-- 文件上传 -->
+        <section id="upload-section" class="section hidden">
+            <h2>上传视频</h2>
+            <div class="upload-area" id="upload-area">
+                <div class="upload-content">
+                    <div class="upload-icon">📹</div>
+                    <p class="upload-text">拖拽视频文件到此处，或点击选择文件</p>
+                    <p class="upload-hint">支持格式：MP4, MOV, AVI, WEBM | 最大 100MB</p>
+                    <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/mov,video/avi,video/x-msvideo,video/webm,.mp4,.mov,.avi,.webm" hidden>
+                    <button class="btn-primary" id="select-btn">选择文件</button>
+                </div>
+            </div>
+            <div class="file-info hidden" id="file-info">
+                <p><strong>已选择：</strong><span id="file-name"></span></p>
+                <p><strong>大小：</strong><span id="file-size"></span></p>
+                <button class="btn-primary" id="upload-btn">开始上传</button>
+                <button class="btn-secondary" id="cancel-btn">取消</button>
+            </div>
+        </section>
+
+        <!-- 上传进度 -->
+        <section id="progress-section" class="section hidden">
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p class="progress-text" id="progress-text">上传中...</p>
+                <p class="progress-percent" id="progress-percent">0%</p>
+            </div>
+        </section>
+
+        <!-- 错误提示 -->
+        <div class="error-message hidden" id="error-message">
+            <p id="error-text"></p>
+            <button class="btn-secondary" id="retry-btn">重试</button>
+        </div>
+    </div>
+
+    <script src="landing.js"></script>
+</body>
+</html>
+

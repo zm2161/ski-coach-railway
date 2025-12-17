@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flo AI 滑雪教练 - 视频分析</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="analyze-container">
+        <header class="analyze-header">
+            <button class="btn-back" id="back-btn">← 返回</button>
+            <h1>视频分析</h1>
+        </header>
+
+        <div class="analyze-content">
+            <!-- 视频播放器区域（左侧60%） -->
+            <div class="video-section">
+                <video id="video-player" controls>
+                    <source id="video-source" src="" type="video/mp4">
+                    您的浏览器不支持视频播放。
+                </video>
+            </div>
+
+            <!-- 右侧内容区域（40%） -->
+            <div class="content-section">
+                <!-- 教练反馈区域 -->
+                <div class="coaching-section">
+                    <h2>教练反馈</h2>
+                    <div class="coaching-windows" id="coaching-windows">
+                        <!-- 动态生成的反馈窗口 -->
+                    </div>
+                </div>
+
+                <!-- 练习推荐区域（视频结束后显示） -->
+                <div class="recommendations-section hidden" id="recommendations-section">
+                    <h2>推荐练习</h2>
+                    <div class="recommendations-list" id="recommendations-list">
+                        <!-- 动态生成的练习推荐 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="analyze.js"></script>
+</body>
+</html>
+

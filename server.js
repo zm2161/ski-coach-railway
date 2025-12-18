@@ -494,33 +494,37 @@ async function generateCoachingFeedback(sport, terrain, segmentNumber, totalSegm
     try {
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
       
-      // 如果有图片，读取并转换为 base64
-      let imageData = null;
+      // 如果有图片，读取并转换为 base64，然后调用多模态 API
+      let result;
       if (imagePath && fs.existsSync(imagePath)) {
         try {
           const imageBuffer = fs.readFileSync(imagePath);
-          imageData = {
-            inlineData: {
-              data: imageBuffer.toString('base64'),
-              mimeType: 'image/jpeg'
-            }
-          };
-          console.log(`使用关键帧图片进行分析: ${imagePath}`);
+          const base64Image = imageBuffer.toString('base64');
+          
+          console.log(`使用关键帧图片进行分析: ${imagePath} (大小: ${imageBuffer.length} bytes)`);
+          
+          // 多模态输入：图片 + 文本（正确的格式）
+          result = await model.generateContent([
+            {
+              inlineData: {
+                data: base64Image,
+                mimeType: 'image/jpeg'
+              }
+            },
+            { text: prompt }
+          ]);
+          
+          console.log(`✓ 多模态 API 调用成功（图片+文本）`);
         } catch (imageError) {
-          console.error(`读取图片失败: ${imageError.message}`);
-          // 如果读取失败，继续使用文本分析
+          console.error(`图片处理失败，回退到文本分析: ${imageError.message}`);
+          // 如果图片处理失败，回退到纯文本分析
+          result = await model.generateContent(prompt);
         }
-      }
-      
-      // 构建内容：如果有图片，包含图片和文本；否则只有文本
-      let result;
-      if (imageData) {
-        // 多模态输入：图片 + 文本
-        result = await model.generateContent([
-          { inlineData: imageData.inlineData },
-          { text: prompt }
-        ]);
       } else {
+        // 没有图片，使用纯文本分析
+        if (imagePath) {
+          console.warn(`图片文件不存在: ${imagePath}，使用文本分析`);
+        }
         result = await model.generateContent(prompt);
       }
       

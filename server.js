@@ -98,6 +98,7 @@ function extractKeyFrame(videoPath, timestamp, outputPath) {
     ffmpeg(videoPath)
       .seekInput(timestamp)
       .frames(1)
+      .outputOptions('-q:v', '2') // 高质量 JPEG
       .output(outputPath)
       .on('end', () => resolve())
       .on('error', (err) => reject(err))
@@ -485,14 +486,44 @@ ${sport === 'skiing' ? SKIING_ANALYSIS_POINTS : SNOWBOARDING_ANALYSIS_POINTS}
 }
 
 // 调用 Gemini API 生成教练反馈（带重试机制）
-async function generateCoachingFeedback(sport, terrain, segmentNumber, totalSegments, retries = 3) {
+async function generateCoachingFeedback(sport, terrain, segmentNumber, totalSegments, imagePath = null, retries = 3) {
   // 使用新的 generateSegmentPrompt 函数生成 prompt
   const prompt = generateSegmentPrompt(sport, terrain, segmentNumber, totalSegments);
   
   for (let i = 0; i < retries; i++) {
     try {
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
-      const result = await model.generateContent(prompt);
+      
+      // 如果有图片，读取并转换为 base64
+      let imageData = null;
+      if (imagePath && fs.existsSync(imagePath)) {
+        try {
+          const imageBuffer = fs.readFileSync(imagePath);
+          imageData = {
+            inlineData: {
+              data: imageBuffer.toString('base64'),
+              mimeType: 'image/jpeg'
+            }
+          };
+          console.log(`使用关键帧图片进行分析: ${imagePath}`);
+        } catch (imageError) {
+          console.error(`读取图片失败: ${imageError.message}`);
+          // 如果读取失败，继续使用文本分析
+        }
+      }
+      
+      // 构建内容：如果有图片，包含图片和文本；否则只有文本
+      let result;
+      if (imageData) {
+        // 多模态输入：图片 + 文本
+        result = await model.generateContent([
+          { inlineData: imageData.inlineData },
+          { text: prompt }
+        ]);
+      } else {
+        result = await model.generateContent(prompt);
+      }
+      
       const response = await result.response;
       const text = response.text();
       
@@ -661,12 +692,40 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
     // 为每个片段生成AI反馈
     const segmentsWithCoaching = await Promise.all(
       segments.map(async (segment) => {
+        // 提取关键帧图片
+        const framePath = path.join(uploadsDir, `${videoId}_frame_${segment.id}.jpg`);
+        let frameExtracted = false;
+        
+        try {
+          await extractKeyFrame(videoPath, segment.freeze_at, framePath);
+          frameExtracted = fs.existsSync(framePath);
+          if (frameExtracted) {
+            console.log(`成功提取关键帧: ${framePath} (时间: ${segment.freeze_at}s)`);
+          }
+        } catch (error) {
+          console.error(`提取关键帧失败 (片段 ${segment.id}, 时间 ${segment.freeze_at}s):`, error.message);
+          // 如果提取失败，继续使用文本分析
+        }
+        
+        // 生成AI反馈（传递图片路径，如果提取成功）
         const coaching = await generateCoachingFeedback(
           sport,
           terrain,
           segment.id,
-          segments.length
+          segments.length,
+          frameExtracted ? framePath : null
         );
+        
+        // 分析完成后删除临时图片文件（节省存储空间）
+        if (frameExtracted && fs.existsSync(framePath)) {
+          try {
+            fs.unlinkSync(framePath);
+            console.log(`已删除临时关键帧: ${framePath}`);
+          } catch (deleteError) {
+            console.error(`删除临时文件失败: ${deleteError.message}`);
+          }
+        }
+        
         return {
           ...segment,
           coaching

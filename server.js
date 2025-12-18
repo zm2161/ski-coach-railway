@@ -11,7 +11,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 初始化 Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  console.error('❌ 错误: GEMINI_API_KEY 环境变量未设置！');
+  console.error('请在 .env 文件中设置 GEMINI_API_KEY');
+  process.exit(1);
+}
+console.log(`[DEBUG] ✓ Gemini API Key 已加载 (长度: ${GEMINI_API_KEY.length})`);
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // 确保上传目录存在
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -487,21 +494,26 @@ ${sport === 'skiing' ? SKIING_ANALYSIS_POINTS : SNOWBOARDING_ANALYSIS_POINTS}
 
 // 调用 Gemini API 生成教练反馈（带重试机制）
 async function generateCoachingFeedback(sport, terrain, segmentNumber, totalSegments, imagePath = null, retries = 3) {
+  console.log(`\n[DEBUG] 开始生成反馈 - 片段 ${segmentNumber}/${totalSegments}, 图片路径: ${imagePath || '无'}`);
+  
   // 使用新的 generateSegmentPrompt 函数生成 prompt
   const prompt = generateSegmentPrompt(sport, terrain, segmentNumber, totalSegments);
   
   for (let i = 0; i < retries; i++) {
     try {
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+      console.log(`[DEBUG] Gemini 模型初始化成功`);
       
       // 如果有图片，读取并转换为 base64，然后调用多模态 API
       let result;
       if (imagePath && fs.existsSync(imagePath)) {
+        console.log(`[DEBUG] 图片文件存在，准备读取: ${imagePath}`);
         try {
           const imageBuffer = fs.readFileSync(imagePath);
           const base64Image = imageBuffer.toString('base64');
           
-          console.log(`使用关键帧图片进行分析: ${imagePath} (大小: ${imageBuffer.length} bytes)`);
+          console.log(`[DEBUG] ✓ 图片读取成功: ${imagePath} (大小: ${imageBuffer.length} bytes, base64长度: ${base64Image.length})`);
+          console.log(`[DEBUG] 准备调用 Gemini API (多模态: 图片+文本)`);
           
           // 多模态输入：图片 + 文本（正确的格式）
           result = await model.generateContent([
@@ -514,22 +526,31 @@ async function generateCoachingFeedback(sport, terrain, segmentNumber, totalSegm
             { text: prompt }
           ]);
           
-          console.log(`✓ 多模态 API 调用成功（图片+文本）`);
+          console.log(`[DEBUG] ✓✓✓ 多模态 API 调用成功（图片+文本）✓✓✓`);
         } catch (imageError) {
-          console.error(`图片处理失败，回退到文本分析: ${imageError.message}`);
+          console.error(`[DEBUG] ❌ 图片处理失败，回退到文本分析:`, imageError);
+          console.error(`[DEBUG] 错误详情:`, imageError.stack);
           // 如果图片处理失败，回退到纯文本分析
           result = await model.generateContent(prompt);
+          console.log(`[DEBUG] 已回退到纯文本分析`);
         }
       } else {
         // 没有图片，使用纯文本分析
         if (imagePath) {
-          console.warn(`图片文件不存在: ${imagePath}，使用文本分析`);
+          console.warn(`[DEBUG] ⚠️ 图片文件不存在: ${imagePath}，使用文本分析`);
+        } else {
+          console.log(`[DEBUG] 无图片路径，使用纯文本分析`);
         }
+        console.log(`[DEBUG] 准备调用 Gemini API (纯文本)`);
         result = await model.generateContent(prompt);
+        console.log(`[DEBUG] ✓ 纯文本 API 调用成功`);
       }
       
       const response = await result.response;
       const text = response.text();
+      
+      console.log(`[DEBUG] API 返回文本长度: ${text.length} 字符`);
+      console.log(`[DEBUG] API 返回内容预览: ${text.substring(0, 200)}...`);
       
       // 尝试解析JSON（可能包含markdown代码块）
       let jsonText = text.trim();
@@ -540,9 +561,11 @@ async function generateCoachingFeedback(sport, terrain, segmentNumber, totalSegm
       }
       
       const coaching = JSON.parse(jsonText);
+      console.log(`[DEBUG] ✓ JSON 解析成功，标题: ${coaching.title}`);
       return coaching;
     } catch (error) {
-      console.error(`Gemini API 调用失败 (尝试 ${i + 1}/${retries}):`, error.message);
+      console.error(`[DEBUG] ❌ Gemini API 调用失败 (尝试 ${i + 1}/${retries}):`, error.message);
+      console.error(`[DEBUG] 错误堆栈:`, error.stack);
       if (i === retries - 1) {
         // 最后一次失败，返回默认反馈
         return {
@@ -700,18 +723,30 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
         const framePath = path.join(uploadsDir, `${videoId}_frame_${segment.id}.jpg`);
         let frameExtracted = false;
         
+        console.log(`\n[DEBUG] ========== 处理片段 ${segment.id}/${segments.length} ==========`);
+        console.log(`[DEBUG] 视频路径: ${videoPath}`);
+        console.log(`[DEBUG] 关键帧时间: ${segment.freeze_at}s`);
+        console.log(`[DEBUG] 目标图片路径: ${framePath}`);
+        
         try {
+          console.log(`[DEBUG] 开始提取关键帧...`);
           await extractKeyFrame(videoPath, segment.freeze_at, framePath);
           frameExtracted = fs.existsSync(framePath);
           if (frameExtracted) {
-            console.log(`成功提取关键帧: ${framePath} (时间: ${segment.freeze_at}s)`);
+            const stats = fs.statSync(framePath);
+            console.log(`[DEBUG] ✓✓✓ 成功提取关键帧: ${framePath}`);
+            console.log(`[DEBUG] 图片大小: ${stats.size} bytes`);
+          } else {
+            console.error(`[DEBUG] ❌ 提取完成但文件不存在: ${framePath}`);
           }
         } catch (error) {
-          console.error(`提取关键帧失败 (片段 ${segment.id}, 时间 ${segment.freeze_at}s):`, error.message);
+          console.error(`[DEBUG] ❌ 提取关键帧失败 (片段 ${segment.id}, 时间 ${segment.freeze_at}s):`, error.message);
+          console.error(`[DEBUG] 错误堆栈:`, error.stack);
           // 如果提取失败，继续使用文本分析
         }
         
         // 生成AI反馈（传递图片路径，如果提取成功）
+        console.log(`[DEBUG] 准备调用 generateCoachingFeedback, frameExtracted: ${frameExtracted}`);
         const coaching = await generateCoachingFeedback(
           sport,
           terrain,
@@ -719,6 +754,7 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
           segments.length,
           frameExtracted ? framePath : null
         );
+        console.log(`[DEBUG] ✓ 片段 ${segment.id} 分析完成\n`);
         
         // 分析完成后删除临时图片文件（节省存储空间）
         if (frameExtracted && fs.existsSync(framePath)) {
@@ -784,7 +820,13 @@ app.get('/health', (req, res) => {
 
 // 启动服务器
 app.listen(PORT, () => {
-  console.log(`服务器运行在端口 ${PORT}`);
-  console.log(`环境: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`\n========================================`);
+  console.log(`🚀 服务器启动成功！`);
+  console.log(`📡 端口: ${PORT}`);
+  console.log(`🌍 环境: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔑 Gemini API: ${GEMINI_API_KEY ? '✓ 已配置' : '✗ 未配置'}`);
+  console.log(`🎬 FFmpeg: 已安装`);
+  console.log(`📁 上传目录: ${uploadsDir}`);
+  console.log(`========================================\n`);
 });
 

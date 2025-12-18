@@ -580,9 +580,13 @@ async function generateCoachingFeedback(sport, terrain, segmentNumber, totalSegm
 }
 
 // 生成练习推荐
-// 生成练习推荐
 async function generateRecommendations(sport, terrain, allSegments, retries = 3) {
-  const framework = sport === 'skiing' ? 'CSIA' : 'CASI';
+  console.log(`\n[DEBUG] ========== 生成练习推荐 ==========`);
+  console.log(`[DEBUG] 运动类型: ${sport === 'skiing' ? '双板滑雪' : '单板滑雪'}`);
+  console.log(`[DEBUG] 地形: ${terrain}`);
+  console.log(`[DEBUG] 片段数量: ${allSegments.length}`);
+  
+  const framework = sport === 'skiing' ? 'CSIA 双板滑雪教学标准' : 'CASI 单板滑雪教学标准';
   const sportName = sport === 'skiing' ? '双板滑雪' : '单板滑雪';
   
   const terrainMap = {
@@ -592,22 +596,46 @@ async function generateRecommendations(sport, terrain, allSegments, retries = 3)
     'moguls': '蘑菇道（雪包）',
     'freestyle': '自由式（公园、跳台）'
   };
+  
+  // 获取地形上下文（与教练反馈使用相同的函数）
+  const terrainContext = getTerrainContext(terrain);
 
-  // 提取所有反馈中的主要问题
+  // 提取所有反馈中的关键信息
+  const coachingSummary = [];
   const identifiedIssues = [];
-  allSegments.forEach(segment => {
-    if (segment.coaching && segment.coaching.text) {
-      // 从反馈文本中提取关键问题（简单提取，实际可以更智能）
-      const text = segment.coaching.text;
-      // 提取包含"问题"、"错误"、"不足"等关键词的句子
+  
+  allSegments.forEach((segment, index) => {
+    if (segment.coaching) {
+      // 收集每个片段的标题和关键问题
+      const title = segment.coaching.title || `片段 ${segment.id}`;
+      const text = segment.coaching.text || '';
+      
+      coachingSummary.push({
+        segment: segment.id,
+        title: title,
+        time: segment.freeze_at
+      });
+      
+      // 从反馈文本中提取关键问题
       const sentences = text.split(/[。！？]/);
       sentences.forEach(sentence => {
-        if (sentence.includes('问题') || sentence.includes('错误') || sentence.includes('不足') || 
-            sentence.includes('内夹') || sentence.includes('僵直') || sentence.includes('后仰') ||
-            sentence.includes('不旋转') || sentence.includes('过度')) {
-          const issue = sentence.trim();
-          if (issue && !identifiedIssues.includes(issue)) {
-            identifiedIssues.push(issue);
+        const trimmed = sentence.trim();
+        // 提取包含问题关键词的句子，或第一句（通常是问题识别）
+        if (trimmed && (
+          trimmed.includes('问题') || 
+          trimmed.includes('错误') || 
+          trimmed.includes('不足') || 
+          trimmed.includes('内夹') || 
+          trimmed.includes('僵直') || 
+          trimmed.includes('后仰') ||
+          trimmed.includes('不旋转') || 
+          trimmed.includes('过度') ||
+          trimmed.includes('太') ||
+          trimmed.includes('缺乏') ||
+          index === 0 // 第一句通常是问题识别
+        )) {
+          if (trimmed.length > 10 && !identifiedIssues.includes(trimmed)) {
+            identifiedIssues.push(trimmed);
           }
         }
       });
@@ -619,40 +647,69 @@ async function generateRecommendations(sport, terrain, allSegments, retries = 3)
     identifiedIssues.push('需要改进基本姿势和平衡');
   }
   
+  // 构建完整的教练反馈摘要
+  const feedbackSummary = coachingSummary.map(c => 
+    `片段${c.segment} (${Math.floor(c.time)}s): ${c.title}`
+  ).join('\n');
+  
+  console.log(`[DEBUG] 教练反馈摘要:`);
+  console.log(feedbackSummary);
+  console.log(`[DEBUG] 识别的主要问题数量: ${identifiedIssues.length}`);
+  console.log(`[DEBUG] 地形上下文: ${getTerrainContext(terrain)}`);
+  
   const prompt = `【任务】
 
-根据刚才的 ${allSegments.length} 个动作片段分析，生成 3-4 个专项练习。
+你是一位专业的${sportName}教练，使用${framework}。
+
+根据刚才对视频的 ${allSegments.length} 个动作片段分析，生成 3-4 个专项练习。
+
+【背景信息】（与教练分析使用相同的context）
+
+- **运动类型**：${sportName}
+- **教学框架**：${framework}
+- **地形**：${terrainMap[terrain] || terrain} - ${terrainContext}
+
+【刚才的教练反馈摘要】
+
+${feedbackSummary}
 
 【识别的主要问题】
 
-${identifiedIssues.join('\n')}
+${identifiedIssues.slice(0, 8).join('\n')}
 
 【练习设计要求】
 
-1. **针对性**：每个练习必须针对上述具体问题之一
+1. **针对性**：每个练习必须针对上述具体问题之一，与教练反馈保持一致
 
-2. **渐进性**：从简单到复杂排序
+2. **渐进性**：从简单到复杂排序，适合当前地形难度
 
-3. **可测量**：练习目标必须可量化（次数、时间、角度）
+3. **可测量**：练习目标必须可量化（次数、时间、角度、距离）
+
+4. **地形适配**：根据${terrainContext}的特点设计练习
+
+5. **框架一致**：使用${framework}的教学方法和术语
 
 【每个练习的结构】
 
 {
   "name": "英文名称 (中文名称)",
-  "description": "2-3句话说明练习方法和目标",
-  "keyPoints": ["关键点1（必须包含具体数值或感官反馈）", "关键点2"]
+  "description": "2-3句话说明练习方法和目标，必须与教练反馈的问题对应",
+  "keyPoints": ["关键点1（必须包含具体数值或感官反馈）", "关键点2（必须包含具体数值）"]
 }
 
-【地形】${terrainMap[terrain] || terrain}
+【重要提醒】
 
-【教学框架】${framework}
+- 练习必须与刚才的教练反馈逻辑一致
+- 如果教练反馈指出"膝盖内夹"，练习应该针对"膝盖外开"
+- 如果教练反馈指出"重心后移"，练习应该针对"重心前移"
+- 使用相同的${framework}术语和教学方法
 
 请以JSON格式返回：
 {
   "recommendations": [
     {
       "name": "练习名称（中英文）",
-      "description": "练习描述",
+      "description": "练习描述（必须对应教练反馈的问题）",
       "keyPoints": ["要点1（包含具体数值）", "要点2（包含具体数值）"]
     }
   ]
@@ -660,10 +717,13 @@ ${identifiedIssues.join('\n')}
 
   for (let i = 0; i < retries; i++) {
     try {
+      console.log(`[DEBUG] 准备调用 Gemini API 生成推荐练习 (尝试 ${i + 1}/${retries})`);
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
+      
+      console.log(`[DEBUG] ✓ Gemini API 返回成功，文本长度: ${text.length} 字符`);
       
       // 尝试解析JSON
       let jsonText = text.trim();
@@ -674,6 +734,14 @@ ${identifiedIssues.join('\n')}
       }
       
       const data = JSON.parse(jsonText);
+      console.log(`[DEBUG] ✓ JSON 解析成功，推荐练习数量: ${data.recommendations ? data.recommendations.length : 0}`);
+      if (data.recommendations && data.recommendations.length > 0) {
+        console.log(`[DEBUG] 推荐练习列表:`);
+        data.recommendations.forEach((rec, idx) => {
+          console.log(`  ${idx + 1}. ${rec.name}`);
+        });
+      }
+      console.log(`[DEBUG] ========== 推荐练习生成完成 ==========\n`);
       return data;
     } catch (error) {
       console.error(`生成练习推荐失败 (尝试 ${i + 1}/${retries}):`, error.message);
